@@ -368,10 +368,7 @@ class NestCameraAPI(NestAPI):
             cookie,
             device_id)
         # log into dropcam
-        self._session.post(
-            f"{API_URL}/dropcam/api/login",
-            data={"access_token": self._access_token}
-        )
+        self.dropcam_login()
         self._device_id = device_id
         self.location = None
         self.name = "Nest Camera"
@@ -391,16 +388,32 @@ class NestCameraAPI(NestAPI):
         self.update()
 
     def update(self):
-        if self._device_id:
-            props = self.get_properties()
-            self._location = None
-            self.name = props["name"]
-            self.online = props["is_online"]
-            self.is_streaming = props["is_streaming"]
-            self.battery_voltage = props["rq_battery_battery_volt"]
-            self.ac_voltge = props["rq_battery_vbridge_volt"]
-            self.location = props["location"]
-            self.data_tier = props["properties"]["streaming.data-usage-tier"]
+        try:
+            if self._device_id:
+                props = self.get_properties()
+                self._location = None
+                self.name = props["name"]
+                self.online = props["is_online"]
+                self.is_streaming = props["is_streaming"]
+                self.battery_voltage = props["rq_battery_battery_volt"]
+                self.ac_voltge = props["rq_battery_vbridge_volt"]
+                self.location = props["location"]
+                self.data_tier = props["properties"]["streaming.data-usage-tier"]
+        except requests.exceptions.RequestException as e:
+            _LOGGER.error(e)
+            _LOGGER.error('Failed to update, trying again')
+            self.update()
+        except ValueError:
+            _LOGGER.debug('Failed to update, trying to log in again')
+            self.login()
+            self.dropcam_login()
+            self.update()
+
+    def dropcam_login(self):
+        self._session.post(
+            f"{API_URL}/dropcam/api/login",
+            data={"access_token": self._access_token}
+        )      
 
     def _set_properties(self, property, value):
         r = self._session.post(
